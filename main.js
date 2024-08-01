@@ -40,7 +40,7 @@ const {batchAddHostRecords, batchRemoveHostRecords} = require('./helper/hosts');
 let loadWindow, mainWindow, tipsWindow = null;
 
 const appVersion       = app.getVersion();
-const MAIN_UI_URL      = "https://api.jihujiasuqi.com/app_ui/pc/home.php"; // 服务器web位置
+const MAIN_UI_URL      = "https://test.client.jihujiasuqi.com/home.php"; // 服务器web位置
 const LOADING_PAGE_URL = path.join(localesPath, "bin\\static\\load\\index.html");
 
 const MAIN_WINDOW_CONFIG = {
@@ -298,34 +298,29 @@ function ExitApp() {
 
 }
 
-ipcMain.on('window', (event, arg) => {
-  if (arg[0] == "ui") {
-    if (arg[1] == "show") {
+ipcMain.on('loadingWindow', (eveent, arg) => {
+  loadWindow.hide();
+  loadWindow.close();
+  clearTimeout(startUpTimeout);
+});
+ipcMain.on('mainWindow', (eveent, arg) => {
+  switch (arg) {
+    case 'show':
       mainWindow.show();
       mainWindow.setMenuBarVisibility(false);
       mainWindow.webContents.send('Framework', Framework);
-    }
-    if (arg[1] == "hide") {
-      mainWindow.hide();
-    }
-    if (arg[1] == "minimize") {
-      mainWindow.minimize();
-    }
-    if (arg[1] == "openDevTools"){
       mainWindow.webContents.openDevTools();
-    }
+      break;
+    case 'hide':
+      mainWindow.hide();
+      break;
+    case 'minimizable':
+      mainWindow.minimize();
+      break;
   }
-  else if (arg[0] == "load") {
-    if (arg[1] == "show") {
-      loadWindow.show();
-    }
-    else {
-      loadWindow.hide();
-      loadWindow.close();
-      clearTimeout(startUpTimeout);
-    }
-  }
-  else if (arg[0] == "tips") {
+});
+ipcMain.on('window', (event, arg) => {
+  if (arg[0] == "tips") {
     if (arg[1] == "show") {
       tipsWindow.show();
     }
