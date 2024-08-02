@@ -58,7 +58,8 @@ const MAIN_WINDOW_CONFIG = {
     contextIsolation: false, // 取消上下文隔离
     enableRemoteModule: true, // 允许使用 remote 模块（如果需要）
     allowRunningInsecureContent: true, // 允许不安全的内容运行
-    webSecurity:false
+    webSecurity:false,
+    // preload: path.join(__dirname, "preload.js")
   }
 };
 const LOAD_WINDOW_CONFIG = {
@@ -208,6 +209,10 @@ function CreateMainWindow() {
     mainWindow = null;
   });
   mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+      mainWindow.setMenuBarVisibility(false);
+      mainWindow.webContents.send('Framework', Framework);
+      mainWindow.webContents.openDevTools();
     let tray = new Tray(path.join(localesPath, 'bin/static/logo/'+app.getName()+'.ico'));
     const contextMenu = Menu.buildFromTemplate(
       [
@@ -303,7 +308,7 @@ ipcMain.on('loadingWindow', (eveent, arg) => {
   loadWindow.close();
   clearTimeout(startUpTimeout);
 });
-ipcMain.on('mainWindow', (eveent, arg) => {
+ipcMain.on('mainWindow', (event, arg) => {
   switch (arg) {
     case 'show':
       mainWindow.show();
@@ -314,9 +319,14 @@ ipcMain.on('mainWindow', (eveent, arg) => {
     case 'hide':
       mainWindow.hide();
       break;
-    case 'minimizable':
+    case 'minimize':
       mainWindow.minimize();
       break;
+    case 'openDevTools':
+      mainWindow.webContents.openDevTools();
+      break;
+    default:
+      logger.warn(`[mainWindow listener] Unknown flag ${arg}`)
   }
 });
 ipcMain.on('window', (event, arg) => {
@@ -374,7 +384,7 @@ ipcMain.on('ping', async (event, arg) => {
 
 // 写入配置文件
 ipcMain.on('speed_code_config', (event, arg) => {
-  logger.debug(`[speed_code_config] ${arg}`);
+  logger.debug(`[speed_code_config] ${arg.toString()}`);
   // console.log(arg); // 打印来自渲染进程的消息
   if (arg.mode == "taskkill") {
     KillAllProcess();
@@ -423,8 +433,6 @@ ipcMain.on('speed_code_config', (event, arg) => {
   datagameconfig = datagameconfig + "@" + arg.Server_config.ip
 
   Fox_writeFile(path.join(localesPath, 'bin\\config\\game_config_wintun'), datagameconfig) // 写入WINTUN配置
-
-  mainWindow.webContents.send('speed_code_config-reply', 'OK'); // 发送ok
 
   if(arg.code_mod == "gost") {
     ///////////////////////////////////////////////////////////////////////
@@ -487,16 +495,16 @@ ipcMain.on('speed_code_config', (event, arg) => {
     logger.debug(`[SpeedProxy] mode ${arg.mode}`);
 
     const SpeedProxy_args = [
-      arg.mode
+      arg.mode.toString()
     ];
 
-    const SpeedProxy = execFile(path.join(localesPath, 'bin\\SpeedProxy.exe'),SpeedProxy_args);
+    const SpeedProxy = execFile(path.join(localesPath, 'bin\\SpeedProxy.exe'), SpeedProxy_args);
     
     // 监听子进程的标准输出数据
     SpeedProxy.stdout.on('data', (data) => {
       if(data.includes('"Bandwidth":{') ){
         // console.log("有流量变化",data);
-        mainWindow.webContents.send('NET_speed-reply', data);// 发送基座信息给渲染层
+        mainWindow.webContents.send('proxy_bd_data', data);// 发送基座信息给渲染层
         return
       }
     
@@ -510,7 +518,7 @@ ipcMain.on('speed_code_config', (event, arg) => {
 
       if (data.includes('NF2<====>OK') || data.includes('Route<====>OK') ) {
         logger.info("[SpeedProxy] Core Module Normal");
-        mainWindow.webContents.send('speed_code', {"start":"OK"});// 发送基座信息给渲染层
+        mainWindow.webContents.send('speed_code', {"id":"SpeedProxy_OK"});// 发送基座信息给渲染层
         // socks_test() // SOCKS测试
       }
       if (data.includes('NF2<====>Exit')) {
