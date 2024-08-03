@@ -417,7 +417,8 @@ ipcMain.on('speed_code_config', (event, arg) => {
   const yaml = require('js-yaml');
   const fileContents = fs.readFileSync('bin\\mihomo\\config\\default.yaml', 'utf8');
   const data = yaml.load(fileContents);
-  data.rules = ["DOMAIN-SUFFIX,ip.sb,PROXY"];
+  data.rules = ["PROCESS-NAME,SpeedNet.exe,DIRECT"];
+  data.rules.push(`PROCESS-NAME,sniproxy.exe,DIRECT`);
   for (let i = 0; i < dataArray.length; i++) {
     let processName = dataArray[i].replaceAll('\r\n','').replaceAll('\r','');
     data.rules.push(`PROCESS-NAME,${processName},PROXY`);
