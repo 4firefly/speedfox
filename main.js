@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu , ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu , ipcMain, dialog, shell } = require('electron');
 
 const path = require('path');
 const fs = require('fs');
@@ -54,12 +54,12 @@ const MAIN_WINDOW_CONFIG = {
   autoHideMenuBar: true, // 自动隐藏菜单栏
   fullscreenable: false, // 禁止f11全屏
   webPreferences: {
-    nodeIntegration: true, // 允许在渲染进程中使用 Node.js
-    contextIsolation: false, // 取消上下文隔离
+    nodeIntegration: false, // 允许在渲染进程中使用 Node.js
+    contextIsolation: true, // 取消上下文隔离
     enableRemoteModule: true, // 允许使用 remote 模块（如果需要）
     allowRunningInsecureContent: true, // 允许不安全的内容运行
     webSecurity:false,
-    // preload: path.join(__dirname, "preload.js")
+    preload: path.join(__dirname, "preload.js")
   }
 };
 const LOAD_WINDOW_CONFIG = {
@@ -261,7 +261,7 @@ function tips_Window(data) {
 }
 
 // TODO: 实际上失效
-function socks_test(tag,test_socks) {
+function socks_test(tag, test_socks) {
   
   const socks_test = exec(`"${path.join(localesPath, 'bin\\curl.exe')}" --socks5-hostname ${test_socks} http://www.baidu.com/ -v`);
   
@@ -273,7 +273,7 @@ function socks_test(tag,test_socks) {
     logger.debug(`[socks_test] : ${data}`);
     if (data.includes('HTTP/1.1 200 OK')) {
       logger.info("[socks_test] SOCKS 可用");
-      mainWindow.webContents.send('speed_code', { "start":"SOCKS OK", "tag":tag });// 发送基座信息给渲染层
+      mainWindow.webContents.send('speed_code', { "status":"ok", "tag": tag });// 发送基座信息给渲染层
     }
     else if (data.includes("Can't complete")){
       logger.warn(
@@ -298,9 +298,6 @@ function ExitApp() {
   batchRemoveHostRecords('# Speed Fox');
   app.isQuiting = true;
   app.quit();
-
-  mainWindow.webContents.send('app_', 'exit');
-
 }
 
 ipcMain.on('loadingWindow', (eveent, arg) => {
@@ -390,8 +387,8 @@ ipcMain.on('speed_code_config', (event, arg) => {
     KillAllProcess();
     return;
   }
-  else if (arg.mode == "socks_test") {
-    socks_test("speed_code_test","127.0.0.1:16780");
+  else if (arg.mode == "socks_startup_check") {
+    socks_test("socks_startup_check", "127.0.0.1:16780");
     return;
   }
   else if (arg.mode == "log") {
@@ -437,7 +434,6 @@ ipcMain.on('speed_code_config', (event, arg) => {
   if(arg.code_mod == "gost") {
     ///////////////////////////////////////////////////////////////////////
     // 启动gost网络连接服务
-
     const gost_args = [
       '-api', '127.114.233.8:17080',
       '-metrics', '127.114.233.8:15088',
@@ -605,7 +601,7 @@ ipcMain.on('host_speed_start', (event, arg) => {
   });
 })
 
-ipcMain.on('socks_test', (event, arg) => {
+ipcMain.on('host_test', (event, arg) => {
   socks_test(arg.tag, arg.server);
 })
 
@@ -726,6 +722,10 @@ ipcMain.on('user_start_exe', (event, arg) => {
   child.unref();
 });
 
+ipcMain.on('openurl', (event, arg) => {
+  // for some unknown reason it can't be exposed?
+  shell.openExternal(arg);
+});
 
 ipcMain.on('test_baidu', (event, arg) => {
   // 启动一个独立的子进程来运行快捷方式
