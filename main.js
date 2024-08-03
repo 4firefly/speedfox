@@ -24,7 +24,6 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
-/***  错误不弹出  ***/
 
 process.argv.forEach(function (item, index, array) {
   if (item.includes("-workdir")) {
@@ -311,7 +310,6 @@ ipcMain.on('mainWindow', (event, arg) => {
       mainWindow.show();
       mainWindow.setMenuBarVisibility(false);
       mainWindow.webContents.send('Framework', Framework);
-      mainWindow.webContents.openDevTools();
       break;
     case 'hide':
       mainWindow.hide();
@@ -413,17 +411,26 @@ ipcMain.on('speed_code_config', (event, arg) => {
   // logger.info(`=== Now Starting nf2 === `);
   // 处理nf2配置
   nf2_config = Buffer.from(arg.Game_config.nf2_config, 'base64').toString('utf-8');
+  logger.info("nf2cfg", nf2_config);
   const dataArray = nf2_config.split("\n");
-  var datagameconfig = "";
-  for (let i = 0; i < dataArray.length; i++){
-    datagameconfig = datagameconfig + dataArray[i].replaceAll('\r\n','').replaceAll('\r','') + ",";  // windows 是\r\n linux是 \r
+  let datagameconfig = "";
+  const yaml = require('js-yaml');
+  const fileContents = fs.readFileSync('bin\\mihomo\\config\\default.yaml', 'utf8');
+  const data = yaml.load(fileContents);
+  data.rules = ["DOMAIN-SUFFIX,ip.sb,PROXY"];
+  for (let i = 0; i < dataArray.length; i++) {
+    let processName = dataArray[i].replaceAll('\r\n','').replaceAll('\r','');
+    data.rules.push(`PROCESS-NAME,${processName},PROXY`);
+    datagameconfig = datagameconfig + processName + ",";  // windows 是\r\n linux是 \r
   }
-
+  data.rules.push(`MATCH,DIRECT`);
+  const yamlStr = yaml.dump(data);
+  fs.writeFileSync('bin\\mihomo\\config\\default.yaml', yamlStr, 'utf8');
   Fox_writeFile(path.join(localesPath, 'bin\\config\\game_config_nf2'), datagameconfig); // 写入nf2配置
 
   net_config = Buffer.from(arg.Game_config.net_config, 'base64').toString('utf-8');
   const dataArray2 = net_config.split("\n");
-  var datagameconfig = "";
+  datagameconfig = "";
   for (let i = 0; i < dataArray2.length; i++) {
     datagameconfig = datagameconfig + dataArray2[i].replaceAll('\r\n','').replaceAll('\r','') + ","  // windows 是\r\n linux是 \r
   }
@@ -489,52 +496,67 @@ ipcMain.on('speed_code_config', (event, arg) => {
   // 启动加速模块
   // setTimeout(function(){
     logger.debug(`[SpeedProxy] mode ${arg.mode}`);
-
-    const SpeedProxy_args = [
-      arg.mode.toString()
-    ];
-
-    const SpeedProxy = execFile(path.join(localesPath, 'bin\\SpeedProxy.exe'), SpeedProxy_args);
-    
-    // 监听子进程的标准输出数据
-    SpeedProxy.stdout.on('data', (data) => {
-      if(data.includes('"Bandwidth":{') ){
-        // console.log("有流量变化",data);
-        mainWindow.webContents.send('proxy_bd_data', data);// 发送基座信息给渲染层
-        return
-      }
-    
-      if(data.includes('"code":{') ){
-        // console.log("有流量变化",data);
-        mainWindow.webContents.send('speed_code', data);// 发送基座信息给渲染层
-        return
-      }
-
-      logger.debug(`[SpeedProxy_cmd_data] ${data}`);
-
-      if (data.includes('NF2<====>OK') || data.includes('Route<====>OK') ) {
-        logger.info("[SpeedProxy] Core Module Normal");
-        mainWindow.webContents.send('speed_code', {"id":"SpeedProxy_OK"});// 发送基座信息给渲染层
-        // socks_test() // SOCKS测试
-      }
-      if (data.includes('NF2<====>Exit')) {
-        console.log("[SpeedProxy] Core Module Exit");
-        mainWindow.webContents.send('speed_code', {"start":"close","Module":"SpeedProxy ERROR"});// 发送基座信息给渲染层
-      }
-    });
+    if (arg.mode == "nf2_start") {
+      const mihomo_args = [
+        '-f', path.join(localesPath, 'bin\\mihomo\\config\\default.yaml'),
+        '-d', path.join(localesPath, 'bin\\mihomo')
+      ];
+      const mihomo = execFile(path.join(localesPath, 'bin\\mihomo\\core.exe'), mihomo_args);
+      mihomo.stdout.on('data', (data) => {
+        logger.info("from mihomo", data);
+      });
+      mihomo.stderr.on('data', (data) => {
+        logger.info("from mihomo", data);
+      });
+      mainWindow.webContents.send('speed_code', {"id":"SpeedProxy_OK"});
+    }
+    else {
+      const SpeedProxy_args = [
+        arg.mode.toString()
+      ];
   
-    // 监听子进程的标准错误数据
-    SpeedProxy.stderr.on('data', (data) => {
-      logger.warn(`[SpeedProxy] data: ${data}`);
-    });
+      const SpeedProxy = execFile(path.join(localesPath, 'bin\\SpeedProxy.exe'), SpeedProxy_args);
+      
+      // 监听子进程的标准输出数据
+      SpeedProxy.stdout.on('data', (data) => {
+        if(data.includes('"Bandwidth":{') ){
+          // console.log("有流量变化",data);
+          mainWindow.webContents.send('proxy_bd_data', data);// 发送基座信息给渲染层
+          return
+        }
+      
+        if(data.includes('"code":{') ){
+          // console.log("有流量变化",data);
+          mainWindow.webContents.send('speed_code', data);// 发送基座信息给渲染层
+          return
+        }
   
-    // 监听子进程的关闭事件
-    SpeedProxy.on('close', (code) => {
-      logger.error(`[SpeedProxy] exit code ${code}`);
+        logger.debug(`[SpeedProxy_cmd_data] ${data}`);
+  
+        if (data.includes('NF2<====>OK') || data.includes('Route<====>OK') ) {
+          logger.info("[SpeedProxy] Core Module Normal");
+          mainWindow.webContents.send('speed_code', {"id":"SpeedProxy_OK"});// 发送基座信息给渲染层
+          // socks_test() // SOCKS测试
+        }
+        if (data.includes('NF2<====>Exit')) {
+          console.log("[SpeedProxy] Core Module Exit");
+          mainWindow.webContents.send('speed_code', {"start":"close","Module":"SpeedProxy ERROR"});// 发送基座信息给渲染层
+        }
+      });
     
-      // console.log(`[SpeedProxy] Exception!`); // todo 手动推出 code 1
-      mainWindow.webContents.send('speed_code', {"start":"close","Module":"SpeedProxy"});// 发送基座信息给渲染层
-    });
+      // 监听子进程的标准错误数据
+      SpeedProxy.stderr.on('data', (data) => {
+        logger.warn(`[SpeedProxy] data: ${data}`);
+      });
+    
+      // 监听子进程的关闭事件
+      SpeedProxy.on('close', (code) => {
+        logger.error(`[SpeedProxy] exit code ${code}`);
+      
+        // console.log(`[SpeedProxy] Exception!`); // todo 手动推出 code 1
+        mainWindow.webContents.send('speed_code', {"start":"close","Module":"SpeedProxy"});// 发送基座信息给渲染层
+      });
+    }
   // }, 100); //单位是毫秒
 
 });
