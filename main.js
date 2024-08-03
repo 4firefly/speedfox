@@ -211,7 +211,6 @@ function CreateMainWindow() {
     mainWindow.show();
       mainWindow.setMenuBarVisibility(false);
       mainWindow.webContents.send('Framework', Framework);
-      mainWindow.webContents.openDevTools();
     let tray = new Tray(path.join(localesPath, 'bin/static/logo/'+app.getName()+'.ico'));
     const contextMenu = Menu.buildFromTemplate(
       [
