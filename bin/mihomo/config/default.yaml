@@ -20,7 +20,8 @@ dns:
   nameserver:
     - https://223.5.5.5/dns-query
 rules:
-  - DOMAIN-SUFFIX,ip.sb,PROXY
+  - PROCESS-NAME,SpeedNet.exe,DIRECT
+  - PROCESS-NAME,sniproxy.exe,DIRECT
   - PROCESS-NAME,StarRail.exe,PROXY
   - PROCESS-NAME,launcher.exe,PROXY
   - PROCESS-NAME,hpatchz.exe,PROXY

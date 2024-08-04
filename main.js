@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { spawn, exec ,execFile } = require('child_process');
 const os = require('os');
-
+const yaml = require('js-yaml');
 const request = require('request');
 const net = require('net');
 
@@ -14,8 +14,6 @@ var localesPath = process.cwd();
 const silent = process.argv.includes('-silent')
   ? true
   : false;
-
-
 
 /***  错误不弹出  ***/
 process.on('uncaughtException', (error) => {
@@ -390,7 +388,7 @@ ipcMain.on('speed_code_config', (event, arg) => {
   }
   else if (arg.mode == "log") {
     //TODO:
-    mainWindow.webContents.send('speed_code', {"start":"log","log":null});
+    mainWindow.webContents.send('speed_code', { "start": "log", "log": null });
     return;
   }
 
@@ -413,7 +411,6 @@ ipcMain.on('speed_code_config', (event, arg) => {
   logger.info("nf2cfg", nf2_config);
   const dataArray = nf2_config.split("\n");
   let datagameconfig = "";
-  const yaml = require('js-yaml');
   const fileContents = fs.readFileSync('bin\\mihomo\\config\\default.yaml', 'utf8');
   const data = yaml.load(fileContents);
   data.rules = ["PROCESS-NAME,SpeedNet.exe,DIRECT"];
@@ -473,7 +470,7 @@ ipcMain.on('speed_code_config', (event, arg) => {
     const v2_args = [
       'run', '-c', path.join(myAppDataPath, 'SpeedNet_V2.json')
     ];
-    const v2ray_exe = execFile(path.join(localesPath, 'bin\\SpeedNet_V2.exe'),v2_args);
+    const v2ray_exe = execFile(path.join(localesPath, 'bin\\SpeedNet_V2.exe'), v2_args);
 
     // 监听子进程的标准输出数据
     v2ray_exe.stdout.on('data', (data) => {
@@ -490,7 +487,6 @@ ipcMain.on('speed_code_config', (event, arg) => {
       logger.error(`[SpeedNet_V2] SpeedNet exit code ${code}`);
       mainWindow.webContents.send('speed_code', {"start":"close","Module":"v2ray_exe"});// 发送基座信息给渲染层
     });
-
   }
   //////////////////////////////////////////////////////////////////////
   // 启动加速模块
@@ -508,7 +504,7 @@ ipcMain.on('speed_code_config', (event, arg) => {
       mihomo.stderr.on('data', (data) => {
         logger.info("from mihomo", data);
       });
-      mainWindow.webContents.send('speed_code', {"id":"SpeedProxy_OK"});
+      mainWindow.webContents.send('speed_code', {"id":"Tunnel_OK"});
     }
     else {
       const SpeedProxy_args = [
@@ -535,7 +531,7 @@ ipcMain.on('speed_code_config', (event, arg) => {
   
         if (data.includes('NF2<====>OK') || data.includes('Route<====>OK') ) {
           logger.info("[SpeedProxy] Core Module Normal");
-          mainWindow.webContents.send('speed_code', {"id":"SpeedProxy_OK"});// 发送基座信息给渲染层
+          mainWindow.webContents.send('speed_code', {"id":"Tunnel_OK"});// 发送基座信息给渲染层
           // socks_test() // SOCKS测试
         }
         if (data.includes('NF2<====>Exit')) {
@@ -789,4 +785,131 @@ ipcMain.on('socks_connect_test', (event, arg) => {
     logger.warn(`[socks_connect_test] ${data}`);
     mainWindow.webContents.send('socks_connect_test', data);// 发送基座信息给渲染层
   });
+});
+
+
+ipcMain.on('startSpeed', (event, arg) => {
+  let nf2_config = Buffer.from(arg.Game_config.nf2_config, 'base64').toString('utf-8');
+  logger.info("nf2cfg", nf2_config);
+  const speedProcesses = nf2_config.split("\n");
+  let nf2Cfg = "";
+  const mihomoCfgFilePath = path.join(localesPath, "bin\\mihomo\\config\\default.yaml");
+  const mihomoCfgFile = yaml.load(
+    fs.readFileSync(
+      'bin\\mihomo\\config\\default.yaml', 'utf8')
+  );
+  mihomoCfgFile.rules = ["PROCESS-NAME,SpeedNet.exe,DIRECT"];
+  mihomoCfgFile.rules.push('PROCESS-NAME,sniproxy.exe,DIRECT');
+  for (let i = 0; i < speedProcesses.length; i++) {
+    let processName = speedProcesses[i].replaceAll('\r\n','').replaceAll('\r','');
+    mihomoCfgFile.rules.push(`PROCESS-NAME,${processName},PROXY`);
+    nf2Cfg = nf2Cfg + processName + ",";
+  }
+  mihomoCfgFile.rules.push(`MATCH,DIRECT`);
+  const ModMihomoCfg = yaml.dump(mihomoCfgFile);
+  fs.writeFileSync(mihomoCfgFilePath, ModMihomoCfg, 'utf8');
+  Fox_writeFile(path.join(localesPath, 'bin\\config\\game_config_nf2'), nf2Cfg);
+
+  let wintunCfg = Buffer.from(arg.Game_config.net_config, 'base64').toString('utf-8');
+  const SpeedIPRange = wintunCfg.split("\n");
+  nf2Cfg = "";
+  for (let i = 0; i < SpeedIPRange.length; i++) {
+    nf2Cfg = nf2Cfg + SpeedIPRange[i].replaceAll('\r\n','').replaceAll('\r','') + ",";
+  }
+  nf2Cfg = nf2Cfg + "@" + arg.Server_config.ip;
+
+  Fox_writeFile(path.join(localesPath, 'bin\\config\\game_config_wintun'), nf2Cfg);
+  if (arg.core_type == "gost") {
+    ///////////////////////////////////////////////////////////////////////
+    // 启动gost网络连接服务
+    const gost_args = [
+      '-api', '127.114.233.8:17080',
+      '-metrics', '127.114.233.8:15088',
+      '-L', 'socks5://:16780?udp=true',
+      '-F', `${arg.Server_config.connect_mode}://${arg.Server_config.method}:${arg.Server_config.token}@${arg.Server_config.ip}:${arg.Server_config.port}`
+    ];
+
+    const gost_exe = execFile(path.join(localesPath, 'bin\\SpeedNet.exe') , gost_args);
+    gost_exe.stdout.on('data', (data) => {
+      logger.debug(`[gost socks5] ${data}`);
+    });
+    gost_exe.stderr.on('data', (data) => {
+      logger.warn(`[gost socks5] ${data}`);
+    });
+    gost_exe.on('close', (code) => {
+      logger.error(`[gost socks5] SpeedNet exit code ${code}`); // TODO:?? code 1 手动停止
+      mainWindow.webContents.send('speed_code', {"start":"close","Module":"gost_exe"});
+    });
+  }
+  else if (arg.code_mod == "v2ray") {
+    Fox_writeFile(path.join(myAppDataPath, 'SpeedNet_V2.json'), arg.v2config); // 写入v2ray配置
+    const v2_args = [
+      'run', '-c', path.join(myAppDataPath, 'SpeedNet_V2.json')
+    ];
+    const v2ray_exe = execFile(path.join(localesPath, 'bin\\SpeedNet_V2.exe'), v2_args);
+    v2ray_exe.stdout.on('data', (data) => {
+      logger.debug(`[SpeedNet_V2] ${data}`);
+    });
+    v2ray_exe.stderr.on('data', (data) => {
+      logger.warn(`[SpeedNet_V2] ${data}`);
+    });
+    v2ray_exe.on('close', (code) => {
+      logger.error(`[SpeedNet_V2] SpeedNet exit code ${code}`);
+      mainWindow.webContents.send('speed_code', {"start":"close","Module":"v2ray_exe"});// 发送基座信息给渲染层
+    });
+  }
+  if (arg.mode == "nf2_start") {
+    const mihomo_args = [
+      '-f', mihomoCfgFilePath,
+      '-d', path.join(myAppDataPath, 'mihomo')
+    ];
+    const mihomo = execFile(path.join(localesPath, 'bin\\mihomo\\core.exe'), mihomo_args);
+    mainWindow.webContents.send('speed_code', {"id":"Tunnel_OK"});
+  } else {
+    const SpeedProxy_args = [
+      arg.mode.toString()
+    ];
+
+    const SpeedProxy = execFile(path.join(localesPath, 'bin\\SpeedProxy.exe'), SpeedProxy_args);
+    
+    // 监听子进程的标准输出数据
+    SpeedProxy.stdout.on('data', (data) => {
+      if(data.includes('"Bandwidth":{') ){
+        // console.log("有流量变化",data);
+        mainWindow.webContents.send('proxy_bd_data', data);// 发送基座信息给渲染层
+        return
+      }
+    
+      if(data.includes('"code":{') ){
+        // console.log("有流量变化",data);
+        mainWindow.webContents.send('speed_code', data);// 发送基座信息给渲染层
+        return
+      }
+
+      logger.debug(`[SpeedProxy_cmd_data] ${data}`);
+
+      if (data.includes('NF2<====>OK') || data.includes('Route<====>OK') ) {
+        logger.info("[SpeedProxy] Core Module Normal");
+        mainWindow.webContents.send('speed_code', {"id":"Tunnel_OK"});// 发送基座信息给渲染层
+        // socks_test() // SOCKS测试
+      }
+      if (data.includes('NF2<====>Exit')) {
+        console.log("[SpeedProxy] Core Module Exit");
+        mainWindow.webContents.send('speed_code', {"start":"close","Module":"SpeedProxy ERROR"});// 发送基座信息给渲染层
+      }
+    });
+  
+    // 监听子进程的标准错误数据
+    SpeedProxy.stderr.on('data', (data) => {
+      logger.warn(`[SpeedProxy] data: ${data}`);
+    });
+  
+    // 监听子进程的关闭事件
+    SpeedProxy.on('close', (code) => {
+      logger.error(`[SpeedProxy] exit code ${code}`);
+    
+      // console.log(`[SpeedProxy] Exception!`); // todo 手动推出 code 1
+      mainWindow.webContents.send('speed_code', {"start":"close","Module":"SpeedProxy"});// 发送基座信息给渲染层
+    });
+  }
 });

@@ -25,6 +25,7 @@ function KillAllProcess() {
   KillTask("SpeedFox.tun2socks.exe");
   KillTask("sniproxy.exe");
   KillTask("SpeedNet_brook.exe");
+  KillTask("core.exe");
 }
 
 // TODO: should callback when failed
