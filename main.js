@@ -15,13 +15,13 @@ const silent = process.argv.includes('-silent')
   ? true
   : false;
 
-/***  错误不弹出  ***/
+/***  错误不弹出  ***
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
 });
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+});*/
 
 process.argv.forEach(function (item, index, array) {
   if (item.includes("-workdir")) {
@@ -807,7 +807,7 @@ ipcMain.on('startSpeed', (event, arg) => {
   }
   mihomoCfgFile.rules.push(`MATCH,DIRECT`);
   const ModMihomoCfg = yaml.dump(mihomoCfgFile);
-  fs.writeFileSync(mihomoCfgFilePath, ModMihomoCfg, 'utf8');
+  fs.writeFileSync(path.join(app.getPath('userData'), "mihomo\\config\\the.yaml"), ModMihomoCfg, 'utf8');
   Fox_writeFile(path.join(localesPath, 'bin\\config\\game_config_nf2'), nf2Cfg);
 
   let wintunCfg = Buffer.from(arg.Game_config.net_config, 'base64').toString('utf-8');
@@ -860,8 +860,8 @@ ipcMain.on('startSpeed', (event, arg) => {
   }
   if (arg.mode == "nf2_start") {
     const mihomo_args = [
-      '-f', mihomoCfgFilePath,
-      '-d', path.join(myAppDataPath, 'mihomo')
+      '-f', path.join(app.getPath('userData'), "mihomo\\config\\the.yaml"),
+      '-d', path.join(app.getPath('userData'), 'mihomo')
     ];
     const mihomo = execFile(path.join(localesPath, 'bin\\mihomo\\core.exe'), mihomo_args);
     mainWindow.webContents.send('speed_code', {"id":"Tunnel_OK"});
